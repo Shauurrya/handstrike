@@ -1,0 +1,28 @@
+{
+  "name": "handstrike",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "HANDSTRIKE - Real-time webcam boxing. An arcade fighting game controlled entirely through computer vision.",
+  "scripts": {
+    "dev": "vite",
+    "build": "node scripts/prepare-assets.mjs && tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "prepare:assets": "node scripts/prepare-assets.mjs",
+    "postinstall": "node scripts/prepare-assets.mjs"
+  },
+  "dependencies": {
+    "@mediapipe/tasks-vision": "^0.10.14",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11"
+  }
+}

@@ -1,0 +1,959 @@
+/* ==========================================================================
+   HANDSTRIKE — design system
+   The single stylesheet for the React UI layer. Canvas rendering owns its own
+   colours via PALETTE in gameConfig.ts; the hex values below are the mirror of
+   that palette, so HUD chrome and painted pixels stay in the same world.
+   ========================================================================== */
+
+/* ==========================================================================
+   1. TOKENS
+   ========================================================================== */
+
+:root {
+  /* Surfaces — near-black, layered so panels read as depth rather than boxes. */
+  --bg: #06070d;
+  --bg2: #0a0c15;
+  --panel: #0d0f19;
+  --panel2: #12151f;
+  --edge: #1d2133;
+  --edge2: #2a3048;
+
+  /* Ink */
+  --ink: #eef1ff;
+  --ink-dim: #8a90ad;
+  /* 4.7:1 on --panel2, the lightest surface it is ever set on. The previous
+     #565c78 measured 2.8:1, and this token carries the tutorial copy, the
+     settings hints and the difficulty descriptions — not just chrome. */
+  --ink-faint: #7a8099;
+
+  /* Semantic accents */
+  --player: #31e6c8;
+  --enemy: #ff2d6f;
+  --warn: #ffb020;
+  --rage: #ff6a00;
+  --good: #48e08a;
+  --crit: #ffd34d;
+  --counter: #7c5cff;
+
+  /* Channel copies of the accents. CSS cannot derive rgba() from a hex custom
+     property, and every glow in this file needs an alpha ramp of its accent. */
+  --player-rgb: 49, 230, 200;
+  --enemy-rgb: 255, 45, 111;
+  --warn-rgb: 255, 176, 32;
+  --rage-rgb: 255, 106, 0;
+  --good-rgb: 72, 224, 138;
+  --crit-rgb: 255, 211, 77;
+  --counter-rgb: 124, 92, 255;
+  --ink-rgb: 238, 241, 255;
+
+  /* Type */
+  --font-display: "Barlow Condensed", Impact, sans-serif;
+  --font-ui: "Chakra Petch", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  /* Radii */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 16px;
+
+  /* Elevation */
+  --shadow-1: 0 2px 10px rgba(0, 0, 0, 0.45);
+  --shadow-2: 0 22px 48px -22px rgba(0, 0, 0, 0.9), 0 2px 10px rgba(0, 0, 0, 0.5);
+  --glow-player: 0 0 0 1px rgba(var(--player-rgb), 0.4), 0 10px 34px -10px rgba(var(--player-rgb), 0.55);
+  --glow-enemy: 0 0 0 1px rgba(var(--enemy-rgb), 0.4), 0 10px 34px -10px rgba(var(--enemy-rgb), 0.6);
+
+  /* Motion — one curve everywhere so the UI feels like one machine. */
+  --ease-out: cubic-bezier(0.22, 0.9, 0.28, 1);
+  --ease-back: cubic-bezier(0.34, 1.42, 0.5, 1);
+  --t-fast: 120ms;
+  --t-base: 150ms;
+  --t-slow: 180ms;
+
+  color-scheme: dark;
+}
+
+/* ==========================================================================
+   2. RESET + BASE
+   ========================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+}
+
+html {
+  /* The game owns the viewport; nothing above the app shell may ever scroll. */
+  overflow: hidden;
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  overflow: hidden;
+  font-family: var(--font-ui);
+  font-weight: 400;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--ink);
+  background-color: var(--bg);
+  /* Layered composition so the shell looks deliberate before the canvas paints:
+     a cool key light top-centre, a warm rim bottom-right, and a faint weave. */
+  background-image:
+    radial-gradient(1100px 700px at 50% -12%, rgba(var(--player-rgb), 0.07), transparent 62%),
+    radial-gradient(880px 620px at 92% 112%, rgba(var(--enemy-rgb), 0.06), transparent 60%),
+    repeating-linear-gradient(115deg, rgba(var(--ink-rgb), 0.014) 0 1px, transparent 1px 8px),
+    linear-gradient(180deg, var(--bg2) 0%, var(--bg) 58%);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  overscroll-behavior: none;
+}
+
+/* Text entry is the one place selection must survive the global lock. */
+input,
+textarea,
+select,
+[contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+  background: none;
+}
+
+button {
+  cursor: pointer;
+}
+
+canvas,
+img,
+svg,
+video {
+  display: block;
+  max-width: 100%;
+}
+
+a {
+  color: var(--player);
+  text-decoration: none;
+}
+
+ul,
+ol {
+  list-style: none;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-weight: 600;
+  font-size: inherit;
+  line-height: 1.15;
+}
+
+::selection {
+  background: rgba(var(--player-rgb), 0.28);
+  color: var(--ink);
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 2px solid rgba(var(--player-rgb), 0.85);
+  outline-offset: 2px;
+}
+
+/* ==========================================================================
+   3. APP SHELL
+   ========================================================================== */
+
+.hs-app {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+/* Canvas host. min-height:0 keeps flex from letting the canvas push the shell. */
+.hs-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.hs-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.hs-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* HUD layers are inert by default; anything clickable opts back in. */
+.hs-overlay > * {
+  pointer-events: none;
+}
+
+.hs-interactive,
+.hs-overlay .hs-interactive,
+.hs-overlay > .hs-interactive {
+  pointer-events: auto;
+}
+
+/* ==========================================================================
+   4. SCREENS + LAYOUT PRIMITIVES
+   ========================================================================== */
+
+.hs-screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(16px, 3.2vh, 44px) clamp(16px, 3.2vw, 48px);
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.hs-screen__inner {
+  width: 100%;
+  max-width: 1200px;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(14px, 2.2vh, 26px);
+  /* Short viewports (1366x768) centre-align; tall ones get breathing room. */
+  margin: auto;
+}
+
+.hs-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.hs-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.hs-spread {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.hs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(248px, 1fr));
+  gap: 14px;
+  min-width: 0;
+}
+
+.hs-divider {
+  height: 1px;
+  width: 100%;
+  flex: 0 0 1px;
+  background: linear-gradient(90deg, transparent, var(--edge), transparent);
+}
+
+/* ==========================================================================
+   5. TYPOGRAPHY
+   ========================================================================== */
+
+.hs-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(2.4rem, 6.2vw, 5.25rem);
+  line-height: 0.9;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  /* Gradient fill keeps the display type from reading as flat white. */
+  background-image: linear-gradient(180deg, var(--ink) 0%, #c2c8e6 52%, #6d7597 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Shadows paint behind the glyph, so the glow survives the transparent fill. */
+.hs-title--neon {
+  --title-rgb: var(--player-rgb);
+  text-shadow:
+    0 0 24px rgba(var(--title-rgb), 0.38),
+    0 0 66px rgba(var(--title-rgb), 0.2);
+}
+
+.hs-subtitle {
+  font-family: var(--font-ui);
+  font-weight: 500;
+  font-size: clamp(0.72rem, 1.05vw, 0.86rem);
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.hs-label {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 0.68rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+/**
+ * Explanatory prose — tutorial steps, settings hints, difficulty blurbs.
+ * `.hs-label` is a micro-caption style and was never sized for sentences.
+ */
+.hs-hint {
+  font-family: var(--font-ui);
+  font-weight: 500;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
+  color: var(--ink-dim);
+}
+
+.hs-value {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 0.95rem;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+.hs-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  letter-spacing: -0.01em;
+}
+
+.hs-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.9em;
+  padding: 0.16em 0.5em;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--ink-dim);
+  background: linear-gradient(180deg, var(--panel2), var(--panel));
+  border: 1px solid var(--edge2);
+  border-radius: var(--r-sm);
+  box-shadow: inset 0 1px 0 rgba(var(--ink-rgb), 0.07), 0 2px 0 rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
+}
+
+/* ==========================================================================
+   6. PANELS
+   ========================================================================== */
+
+.hs-panel {
+  position: relative;
+  padding: clamp(14px, 1.6vw, 20px);
+  background: linear-gradient(180deg, var(--panel2) 0%, var(--panel) 68%);
+  border: 1px solid var(--edge);
+  border-radius: var(--r-lg);
+  box-shadow: inset 0 1px 0 rgba(var(--ink-rgb), 0.055), var(--shadow-2);
+  min-width: 0;
+}
+
+/* Corner bracket — the detail that stops a panel reading as a plain rectangle. */
+.hs-panel::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 38px;
+  height: 38px;
+  border-top: 1px solid var(--edge2);
+  border-right: 1px solid var(--edge2);
+  border-top-right-radius: var(--r-lg);
+  -webkit-mask-image: linear-gradient(225deg, #000 0 42%, transparent 78%);
+  mask-image: linear-gradient(225deg, #000 0 42%, transparent 78%);
+  pointer-events: none;
+}
+
+.hs-panel--flush {
+  padding: 0;
+  overflow: hidden;
+}
+
+/* ==========================================================================
+   7. BUTTONS
+   ========================================================================== */
+
+.hs-btn {
+  /* Variants only re-point these two locals; the rest of the rule is shared. */
+  --btn-rgb: var(--ink-rgb);
+  --btn-accent: var(--edge2);
+
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6em;
+  padding: 0.72rem 1.4rem 0.72rem 1.65rem;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: clamp(0.95rem, 1.1vw, 1.08rem);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--ink);
+  background-color: rgba(13, 15, 25, 0.72);
+  background-image: linear-gradient(180deg, rgba(var(--ink-rgb), 0.055), rgba(var(--ink-rgb), 0.012));
+  border: 1px solid var(--edge);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  overflow: hidden;
+  transition:
+    transform var(--t-base) var(--ease-out),
+    box-shadow var(--t-base) var(--ease-out),
+    opacity var(--t-fast) linear;
+}
+
+/* Left accent bar. Only its opacity animates, so hover stays composited. */
+.hs-btn::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--btn-accent);
+  opacity: 0.5;
+  transition: opacity var(--t-base) var(--ease-out);
+  pointer-events: none;
+}
+
+.hs-btn:hover {
+  transform: translateY(-1px);
+  /* Inset ring reads as the border brightening without animating border-color. */
+  box-shadow:
+    inset 0 0 0 1px rgba(var(--btn-rgb), 0.42),
+    0 10px 26px -12px rgba(var(--btn-rgb), 0.5),
+    var(--shadow-1);
+}
+
+.hs-btn:hover::before {
+  opacity: 1;
+}
+
+.hs-btn:active {
+  transform: translateY(0);
+}
+
+.hs-btn:focus-visible {
+  outline: 2px solid rgba(var(--btn-rgb), 0.9);
+  outline-offset: 2px;
+}
+
+.hs-btn.is-active {
+  color: var(--ink);
+  box-shadow:
+    inset 0 0 0 1px rgba(var(--btn-rgb), 0.5),
+    inset 0 0 22px -6px rgba(var(--btn-rgb), 0.3);
+}
+
+.hs-btn.is-active::before {
+  opacity: 1;
+}
+
+.hs-btn:disabled,
+.hs-btn[aria-disabled="true"] {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.hs-btn:disabled:hover,
+.hs-btn[aria-disabled="true"]:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.hs-btn--primary {
+  --btn-rgb: var(--player-rgb);
+  --btn-accent: var(--player);
+  background-color: rgba(var(--player-rgb), 0.09);
+  background-image: linear-gradient(180deg, rgba(var(--player-rgb), 0.16), rgba(var(--player-rgb), 0.03));
+  border-color: rgba(var(--player-rgb), 0.34);
+}
+
+.hs-btn--primary::before {
+  opacity: 0.85;
+  box-shadow: 0 0 14px rgba(var(--player-rgb), 0.7);
+}
+
+.hs-btn--primary:hover {
+  box-shadow:
+    inset 0 0 0 1px rgba(var(--player-rgb), 0.7),
+    var(--glow-player),
+    var(--shadow-1);
+}
+
+.hs-btn--danger {
+  --btn-rgb: var(--enemy-rgb);
+  --btn-accent: var(--enemy);
+  background-color: rgba(var(--enemy-rgb), 0.08);
+  background-image: linear-gradient(180deg, rgba(var(--enemy-rgb), 0.14), rgba(var(--enemy-rgb), 0.03));
+  border-color: rgba(var(--enemy-rgb), 0.3);
+}
+
+.hs-btn--danger:hover {
+  box-shadow:
+    inset 0 0 0 1px rgba(var(--enemy-rgb), 0.65),
+    var(--glow-enemy),
+    var(--shadow-1);
+}
+
+.hs-btn--ghost {
+  --btn-rgb: var(--ink-rgb);
+  color: var(--ink-dim);
+  background-color: transparent;
+  background-image: none;
+  border-color: transparent;
+}
+
+.hs-btn--ghost::before {
+  opacity: 0;
+}
+
+.hs-btn--ghost:hover {
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px rgba(var(--ink-rgb), 0.14);
+}
+
+.hs-btn--ghost:hover::before {
+  opacity: 0.6;
+}
+
+.hs-btn--sm {
+  padding: 0.42rem 0.85rem 0.42rem 1rem;
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  border-radius: var(--r-sm);
+}
+
+.hs-btn--sm::before {
+  width: 2px;
+}
+
+/* ==========================================================================
+   8. METERS
+   ========================================================================== */
+
+.hs-meter {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 8px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid var(--edge);
+  border-radius: var(--r-sm);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.75);
+  overflow: hidden;
+}
+
+.hs-meter__fill {
+  position: relative;
+  height: 100%;
+  width: 0;
+  /* background-color is the component's job (inline style); the sheen rides on
+     background-image so any colour it picks still gets the same shading. */
+  background-color: var(--player);
+  background-image: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.3) 0%,
+    rgba(255, 255, 255, 0.04) 46%,
+    rgba(0, 0, 0, 0.28) 100%
+  );
+  border-radius: inherit;
+  transition: width 220ms var(--ease-out);
+}
+
+/* Bright leading edge — colour-agnostic so it works over any inline fill. */
+.hs-meter__fill::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 2px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.6);
+  pointer-events: none;
+}
+
+.hs-meter--lg {
+  height: 14px;
+  border-radius: var(--r-sm);
+}
+
+.hs-meter--lg .hs-meter__fill::after {
+  width: 3px;
+}
+
+/* Enemy HP drains towards the centre of the screen, so its fill anchors right. */
+.hs-meter--flip {
+  justify-content: flex-end;
+}
+
+.hs-meter--flip .hs-meter__fill::after {
+  right: auto;
+  left: 0;
+}
+
+/* ==========================================================================
+   9. CHIPS, BADGES, STATUS DOTS
+   ========================================================================== */
+
+.hs-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+  padding: 0.24em 0.72em;
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  background: rgba(var(--ink-rgb), 0.045);
+  border: 1px solid var(--edge);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.hs-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+  padding: 0.18em 0.55em;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+  color: var(--ink);
+  background: var(--panel2);
+  border: 1px solid var(--edge2);
+  border-radius: var(--r-sm);
+  white-space: nowrap;
+}
+
+.hs-dot {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ink-faint);
+}
+
+.hs-dot--on {
+  background: var(--good);
+  box-shadow: 0 0 10px rgba(var(--good-rgb), 0.75);
+  animation: pulse 2.4s ease-in-out infinite;
+}
+
+.hs-dot--off {
+  background: var(--ink-faint);
+  box-shadow: none;
+}
+
+.hs-dot--warn {
+  background: var(--warn);
+  box-shadow: 0 0 10px rgba(var(--warn-rgb), 0.75);
+}
+
+/* ==========================================================================
+   10. OVERLAY TEXTURE
+   ========================================================================== */
+
+.hs-scanlines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.16) 0 1px,
+    transparent 1px 3px
+  );
+  mix-blend-mode: multiply;
+  opacity: 0.55;
+}
+
+/* ==========================================================================
+   11. KEYFRAMES — transform/opacity only, so nothing forces layout
+   ========================================================================== */
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.86); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translate3d(0, 18px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes popIn {
+  0% { opacity: 0; transform: scale(0.82); }
+  70% { opacity: 1; transform: scale(1.035); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  20% { transform: translate3d(-5px, 1px, 0); }
+  40% { transform: translate3d(4px, -2px, 0); }
+  60% { transform: translate3d(-3px, 2px, 0); }
+  80% { transform: translate3d(2px, -1px, 0); }
+}
+
+/* Applied to a dedicated glow layer rather than the element itself. */
+@keyframes glowPulse {
+  0%, 100% { opacity: 0.35; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.06); }
+}
+
+@keyframes countdownZoom {
+  0% { opacity: 0; transform: scale(2.3); }
+  22% { opacity: 1; transform: scale(1); }
+  74% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.86); }
+}
+
+@keyframes marquee {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-50%, 0, 0); }
+}
+
+/* ==========================================================================
+   12. MOUNT ANIMATION UTILITIES
+   ========================================================================== */
+
+.hs-fade-in {
+  animation: fadeIn 220ms var(--ease-out) both;
+}
+
+.hs-slide-up {
+  animation: slideUp 280ms var(--ease-out) both;
+}
+
+.hs-pop {
+  animation: popIn 240ms var(--ease-back) both;
+}
+
+/* ==========================================================================
+   13. SCROLLBARS
+   ========================================================================== */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--edge2) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: var(--r-sm);
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--edge2);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: #3a4266;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ==========================================================================
+   14. REDUCED MOTION
+   Settings exposes an explicit toggle (appState.Settings.reducedMotion) which
+   stamps the root; the media query covers users who never open Settings.
+   ========================================================================== */
+
+[data-reduced-motion="true"],
+[data-reduced-motion="true"] *,
+[data-reduced-motion="true"] *::before,
+[data-reduced-motion="true"] *::after {
+  animation: none !important;
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition: none !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition: none !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ==========================================================================
+   15. RESPONSIVE
+   Target envelope is 1366x768 (readable, nothing clipped) to 1920x1080 (roomy).
+   ========================================================================== */
+
+/* Short laptops: reclaim vertical space before anything has to scroll. */
+@media (max-height: 820px) {
+  .hs-screen {
+    padding-block: 14px;
+  }
+
+  .hs-screen__inner {
+    gap: 14px;
+  }
+
+  .hs-title {
+    font-size: clamp(2.1rem, 4.6vh, 3.6rem);
+  }
+
+  .hs-panel {
+    padding: 14px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .hs-grid {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+  }
+
+  .hs-subtitle {
+    letter-spacing: 0.24em;
+  }
+}
+
+@media (max-width: 760px) {
+  body {
+    font-size: 14px;
+  }
+
+  .hs-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hs-screen {
+    padding: 12px;
+  }
+
+  .hs-btn {
+    padding: 0.62rem 1rem 0.62rem 1.2rem;
+  }
+}
+
+/* Fine pointers only: touch devices have no hover, and the lift sticks. */
+@media (hover: none) {
+  .hs-btn:hover {
+    transform: none;
+  }
+}
+
+/* ==========================================================================
+   PRIVACY NOTICE
+   Persistent, quiet reassurance that no frame ever leaves the device.
+   ========================================================================== */
+
+.hs-privacy {
+  position: fixed;
+  left: 50%;
+  bottom: 6px;
+  transform: translateX(-50%);
+  z-index: 40;
+  pointer-events: none;
+  font-family: var(--font-ui);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  opacity: 0.55;
+  white-space: nowrap;
+}
+
+@media (max-height: 720px) {
+  .hs-privacy {
+    font-size: 9px;
+    bottom: 3px;
+  }
+}
